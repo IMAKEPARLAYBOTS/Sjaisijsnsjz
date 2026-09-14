@@ -402,8 +402,6 @@ do
 		while scriptRunning do
 			task.wait(0.5)
 
-			-- Never watchdog a carry walk: the desync swap can make the token
-			-- appear frozen while the walk is actually progressing fine.
 			if carrySpeedLocked or carryWalkActive then
 				lastSeen = currentWalkToken
 				stuckTimer = 0
@@ -744,6 +742,13 @@ local function applyFpsCapLoop()
 	end)
 end
 applyFpsCapLoop()
+
+-- ============================================================
+-- YIELD: let the client render one frame before we build the GUI.
+-- Building ~120 instances synchronously is the biggest single
+-- stall in this script; this single yield kills most of it.
+-- ============================================================
+task.wait()
 
 -----------------------------------
 -- GUI INTERFACE SETUP (TABBED THEME)
@@ -1192,6 +1197,11 @@ local mapPage = createTabPage("MapTeleport")
 local miscPage = createTabPage("Misc")
 
 -- ============================================================
+-- YIELD: let the client breathe before wiring up farm content.
+-- ============================================================
+task.wait()
+
+-- ============================================================
 -- AUTOFARM TAB
 -- ============================================================
 
@@ -1506,6 +1516,11 @@ for _, mapInfo in ipairs(Settings.MapLocations) do
 		walkToTarget(mapInfo.Pos, Settings.TravelSpeed) 
 	end)
 end
+
+-- ============================================================
+-- YIELD: let the client catch up before the poll loops spin up.
+-- ============================================================
+task.wait()
 
 task.spawn(function()
 	while scriptRunning do
@@ -2008,6 +2023,12 @@ local function hookChatMessage(message)
 	handleEggSpawn(message)
 end
 
+-- ============================================================
+-- YIELD: let the client catch up before installing the hook
+-- and wiring chat signals.
+-- ============================================================
+task.wait()
+
 task.spawn(function()
 	local TextChatService = game:GetService("TextChatService")
 	if not TextChatService then return end
@@ -2293,6 +2314,11 @@ end)
 table.insert(scriptConnections, spacebarConn)
 
 -- ============================================================
+-- YIELD: let the client settle before installing the hook.
+-- ============================================================
+task.wait()
+
+-- ============================================================
 -- AUTO STEAL
 -- ============================================================
 local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -2324,10 +2350,6 @@ local oldNamecall; oldNamecall = hookmetamethod(game, "__namecall", newcclosure(
 					if toggleStateV1 and scriptRunning then
 						local targetPos = Settings.BaseDropPosition
 						if targetPos then
-							-- Keep walking toward base until we actually arrive.
-							-- Re-issues walkToTarget if anything prematurely ends
-							-- a walk pass (watchdog was disabled for carry, but
-							-- desync swaps / token bumps could still interrupt).
 							local arrived = false
 							local attempts = 0
 							while scriptRunning and toggleStateV1 and not arrived and attempts < 20 do
